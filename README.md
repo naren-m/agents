@@ -1,6 +1,12 @@
 # agents
 
-Pluggable agent backend abstraction for the RCA pipeline. Lets the RCA system spawn and manage different AI agent backends through a single unified API.
+`agents` is a lightweight Python wrapper for invoking command-line AI agents from
+agentic workflows. It gives orchestrators one async API to discover installed
+agent CLIs, start tasks, stream output, await results, cancel runs, and collect
+telemetry without coupling workflow code to one vendor.
+
+Built-in adapters support Cursor Agent, Codex CLI, and GitHub Copilot CLI. Custom
+CLI and in-process backends can use the same lifecycle and result types.
 
 ## Install
 
@@ -41,17 +47,19 @@ pip install -e ".[test]"
 ```python
 from pathlib import Path
 from agents import AgentConfig, AgentManager
+from agents.cli.codex import CodexAgent
 from agents.cli.cursor import CursorAgent
 
 manager = AgentManager(
     config=AgentConfig(
         workspace=Path.cwd(),
-        mcp_server_url="http://localhost:8400/mcp",
         timeout_seconds=900,
     ),
     preferred_backend="auto",
 )
+
 manager.register_cli(CursorAgent())
+manager.register_cli(CodexAgent())
 
 # Spawn an agent
 run = await manager.spawn("Analyze this project")
@@ -78,8 +86,8 @@ AgentManager
   |
   +-- CLI agents (subprocess-based)
   |     +-- CursorAgent    (cursor-agent / agent binary)
-  |     +-- CopilotAgent   (stub)
-  |     +-- CodexAgent      (stub)
+  |     +-- CopilotAgent   (copilot binary)
+  |     +-- CodexAgent     (codex binary)
   |
   +-- In-process agents (Python-native)
         +-- LangGraphAgent  (stub)
@@ -97,7 +105,7 @@ AgentManager
 
 ## Key Types
 
-- **`AgentConfig`** -- workspace, MCP URL, timeout, transcript dir, env vars
+- **`AgentConfig`** -- workspace, timeout, transcript dir, env vars, event bus
 - **`AgentRun`** -- tracks a run: id, backend, status, PID, timestamps, telemetry
 - **`AgentResult`** -- final output: success, text, run with filled telemetry
 - **`AgentManager`** -- registry, backend selection, spawn/wait/cancel, concurrency (max 2)
