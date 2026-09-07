@@ -14,6 +14,7 @@ from agents.console.envelope import (
 )
 from agents.console.lifecycle import cancel_run, show_logs, start_run, status_run
 from agents.console.registry import build_registry, validate_flags
+from agents.console.stats import stats_command
 from agents.console.store import RunStore
 from agents.inprocess.ollama import embed_files
 from agents.types import AgentConfig, Capability
@@ -109,6 +110,22 @@ def _build_parser() -> argparse.ArgumentParser:
         "--follow", action="store_true",
         help="Stream until the run finishes")
 
+    stats_p = sub.add_parser(
+        "stats",
+        help="Summarise past runs from the ledger",
+        epilog=(
+            "Examples:\n"
+            "  agents stats\n"
+            "  agents stats --since 7d --backend ollama\n"
+            "  agents stats --format table\n"
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    stats_p.add_argument("--since", help="Window, e.g. 7d, 12h, 30m")
+    stats_p.add_argument("--backend", help="Only this backend")
+    stats_p.add_argument(
+        "--format", dest="fmt", choices=["json", "table"], default="json")
+
     return parser
 
 
@@ -173,6 +190,10 @@ def _cmd_run(args, registry: dict) -> int:
         result.run.run_id = run_id
         RunStore().save(result.run)
 
+    # Every finished run lands in the ledger; without it `stats` has nothing
+    # to read and delegation savings stay unmeasurable.
+    RunStore().append_ledger(result.run)
+
     print(json.dumps(build_envelope(result), indent=2))
     return EXIT_OK if result.success else EXIT_AGENT_FAILED
 
@@ -193,6 +214,8 @@ def main(argv: list[str] | None = None) -> int:
         return cancel_run(args.run_id, RunStore())
     if args.command == "logs":
         return show_logs(args.run_id, RunStore(), args.follow)
+    if args.command == "stats":
+        return stats_command(RunStore(), args.since, args.backend, args.fmt)
     return EXIT_OK
 
 

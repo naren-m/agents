@@ -42,6 +42,39 @@ pip install -e ".[test]"
 > cd /tmp/agents && pip install .
 > ```
 
+## Console
+
+`pip install agents` provides an `agents` command for handing a task to a
+backend and getting the result back as a JSON envelope.
+
+```bash
+agents backends list
+agents run --backend ollama -f src/a.py --task "list the public functions"
+agents run --backend agy --workspace . --task "where is retry handled?"
+
+agents start --backend agy --workspace . --task "audit error handling"
+agents status <run_id>
+agents logs <run_id> --follow
+agents cancel <run_id>
+
+agents stats --since 7d --format table
+```
+
+Backends declare what input they accept. `agy` explores a workspace with its
+own tools; `ollama` has no tools, so files must be inlined with `-f`. Passing
+the wrong flag fails immediately with a corrected invocation.
+
+Exit codes: `0` success, `1` the agent ran and failed, `2` usage error,
+`3` backend unavailable. On a usage error nothing is written to stdout, so a
+caller can always parse stdout as the envelope when it is non-empty.
+
+Every finished run is appended to a ledger under `~/.agents` (override with
+`AGENTS_HOME`), which is what `agents stats` reads. Local ollama runs record a
+cost of `0.0` against real token counts, which is what makes the saving from
+delegating work legible rather than assumed.
+
+The `ollama` backend needs its extra: `pip install "agents[ollama]"`.
+
 ## Quick Start
 
 ```python
