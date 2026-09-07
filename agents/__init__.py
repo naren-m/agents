@@ -6,7 +6,7 @@ Two plugin categories:
 """
 
 from agents.manager import AgentManager
-from agents.types import AgentConfig, AgentResult, AgentRun
+from agents.types import AgentConfig, AgentResult, AgentRun, Capability
 
 __version__ = "0.1.0"
 
@@ -15,5 +15,6 @@ __all__ = [
     "AgentManager",
     "AgentResult",
     "AgentRun",
+    "Capability",
     "__version__",
 ]
