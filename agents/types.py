@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import uuid
 from dataclasses import dataclass, field
+from enum import Enum
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -138,3 +139,16 @@ class AgentResult:
     success: bool
     output: str
     run: AgentRun
+
+
+class Capability(str, Enum):
+    """What kind of input a backend accepts.
+
+    ``str``-valued rather than ``enum.StrEnum`` because the project floor is
+    Python 3.10 and ``StrEnum`` landed in 3.11.
+    """
+
+    WORKSPACE = "workspace"          # can be pointed at a directory and explore it
+    TOOLS = "tools"                  # has its own file/shell tools
+    MCP = "mcp"                      # can attach MCP servers
+    CONTEXT = "context_files"        # has no tools; content must be inlined

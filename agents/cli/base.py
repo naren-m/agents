@@ -24,7 +24,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Protocol, runtime_checkable
 
 from agents.stream.file_sink import FileStreamSink
-from agents.types import AgentConfig, AgentResult, AgentRun
+from agents.types import AgentConfig, AgentResult, AgentRun, Capability
 
 if TYPE_CHECKING:
     from agents.event_bus import RunEventBus
@@ -130,6 +130,12 @@ class BaseCLIAgent:
 
     name: str = ""
     _binary_names: list[str] = []
+
+    # Backends that explore a workspace with their own tools. Subclasses that
+    # work differently (e.g. completion-only) override this.
+    capabilities: frozenset[Capability] = frozenset(
+        {Capability.WORKSPACE, Capability.TOOLS}
+    )
 
     _processes: dict[str, asyncio.subprocess.Process]
 

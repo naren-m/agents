@@ -21,6 +21,10 @@ dependencies = []
 [project.optional-dependencies]
 test = ["pytest", "pytest-asyncio", "httpx"]
 http = ["fastapi>=0.110"]
+ollama = ["httpx"]
+
+[project.scripts]
+agents = "agents.console.main:main"
 
 [build-system]
 requires = ["hatchling"]
