@@ -1,3 +1,5 @@
+import asyncio
+
 import pytest
 
 from agents.inprocess.ollama import (
@@ -84,3 +86,29 @@ async def test_run_marks_failed_on_error(monkeypatch, tmp_path):
 
 async def test_cancel_before_run_is_false():
     assert await OllamaAgent().cancel() is False
+
+
+async def test_run_records_duration(monkeypatch, tmp_path):
+    # Found by an end-to-end run: telemetry is the point of this project, and
+    # duration_ms was silently staying 0 because nothing measured it.
+    async def fake_post(self, prompt, num_ctx, model):
+        # Sleep so elapsed time is actually measurable: a sub-millisecond mock
+        # would round to 0 and the assertion would say nothing.
+        await asyncio.sleep(0.01)
+        return {"response": "x", "prompt_eval_count": 1, "eval_count": 1}
+
+    monkeypatch.setattr(OllamaAgent, "_post_generate", fake_post)
+    result = await OllamaAgent().run("q", AgentConfig(workspace=tmp_path))
+
+    assert result.run.duration_ms > 0
+
+
+async def test_failed_run_also_records_duration(monkeypatch, tmp_path):
+    async def boom(self, prompt, num_ctx, model):
+        await asyncio.sleep(0.01)
+        raise RuntimeError("nope")
+
+    monkeypatch.setattr(OllamaAgent, "_post_generate", boom)
+    result = await OllamaAgent().run("q", AgentConfig(workspace=tmp_path))
+
+    assert result.run.duration_ms > 0

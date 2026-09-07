@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import time
 from pathlib import Path
 
 from agents.types import AgentConfig, AgentResult, AgentRun, Capability
@@ -119,10 +120,12 @@ class OllamaAgent:
         run.model = model
 
         num_ctx = size_num_ctx(len(prompt))
+        started = time.monotonic()
         try:
             payload = await self._post_generate(prompt, num_ctx, model)
         except Exception as exc:  # noqa: BLE001 - surfaced to the caller
             logger.warning("ollama run failed: %s", exc)
+            run.duration_ms = int((time.monotonic() - started) * 1000)
             run.mark_failed()
             return AgentResult(success=False, output=str(exc), run=run)
 
@@ -132,6 +135,7 @@ class OllamaAgent:
         # Local inference is free. This zero is what makes savings legible.
         run.llm_total_cost_usd = 0.0
         run.metadata["num_ctx"] = num_ctx
+        run.duration_ms = int((time.monotonic() - started) * 1000)
         run.mark_completed()
 
         return AgentResult(success=True, output=output, run=run)
