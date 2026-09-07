@@ -3,12 +3,15 @@
 from __future__ import annotations
 
 import json
+import os
 from dataclasses import asdict
 from pathlib import Path
 
 from agents.types import AgentRun
 
-_DEFAULT_ROOT = Path.home() / ".agents"
+def _default_root() -> Path:
+    override = os.environ.get("AGENTS_HOME")
+    return Path(override) if override else Path.home() / ".agents"
 
 
 def _serialise(run: AgentRun) -> dict:
@@ -25,7 +28,7 @@ class RunStore:
     """Run state under ``~/.agents``: one file per run, plus a ledger."""
 
     def __init__(self, root: Path | None = None):
-        self.root = Path(root) if root is not None else _DEFAULT_ROOT
+        self.root = Path(root) if root is not None else _default_root()
         self.runs_dir = self.root / "runs"
         self.ledger_path = self.root / "runs.jsonl"
         self.keys_path = self.root / "keys.json"

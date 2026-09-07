@@ -12,7 +12,9 @@ from agents.console.envelope import (
     EXIT_AGENT_FAILED, EXIT_OK, EXIT_UNAVAILABLE,
     build_envelope, usage_error,
 )
+from agents.console.lifecycle import cancel_run, show_logs, start_run, status_run
 from agents.console.registry import build_registry, validate_flags
+from agents.console.store import RunStore
 from agents.inprocess.ollama import embed_files
 from agents.types import AgentConfig, Capability
 
@@ -32,6 +34,9 @@ def _add_run_flags(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "--timeout", type=int, default=300,
         help="Timeout in seconds (default: 300)")
+    parser.add_argument(
+        "--run-id",
+        help=argparse.SUPPRESS)  # internal: set by `agents start`
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -68,6 +73,42 @@ def _build_parser() -> argparse.ArgumentParser:
         epilog="Examples:\n  agents backends list\n",
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
+    start_p = sub.add_parser(
+        "start",
+        help="Start a task in the background and return a run_id",
+        epilog=(
+            "Examples:\n"
+            "  agents start --backend agy --workspace . --task \"audit error handling\"\n"
+            "  agents start --backend ollama -f a.py --task \"...\" --idempotency-key job-42\n"
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    _add_run_flags(start_p)
+    start_p.add_argument(
+        "--idempotency-key",
+        help="Reuse the existing run_id if this key was already started")
+
+    status_p = sub.add_parser(
+        "status", help="Show the state of a run",
+        epilog="Examples:\n  agents status r_8f3a\n",
+        formatter_class=argparse.RawDescriptionHelpFormatter)
+    status_p.add_argument("run_id")
+
+    cancel_p = sub.add_parser(
+        "cancel", help="Cancel a running task",
+        epilog="Examples:\n  agents cancel r_8f3a\n",
+        formatter_class=argparse.RawDescriptionHelpFormatter)
+    cancel_p.add_argument("run_id")
+
+    logs_p = sub.add_parser(
+        "logs", help="Show captured output for a run",
+        epilog="Examples:\n  agents logs r_8f3a\n  agents logs r_8f3a --follow\n",
+        formatter_class=argparse.RawDescriptionHelpFormatter)
+    logs_p.add_argument("run_id")
+    logs_p.add_argument(
+        "--follow", action="store_true",
+        help="Stream until the run finishes")
+
     return parser
 
 
@@ -124,6 +165,14 @@ def _cmd_run(args, registry: dict) -> int:
     else:
         result = asyncio.run(_run_cli_backend(backend, prompt, config))
 
+    # When launched by `agents start`, adopt the run_id the parent recorded and
+    # persist the terminal state, otherwise status/logs would never see the run
+    # finish and --follow would hang forever.
+    run_id = getattr(args, "run_id", None)
+    if run_id:
+        result.run.run_id = run_id
+        RunStore().save(result.run)
+
     print(json.dumps(build_envelope(result), indent=2))
     return EXIT_OK if result.success else EXIT_AGENT_FAILED
 
@@ -136,6 +185,14 @@ def main(argv: list[str] | None = None) -> int:
         return _cmd_backends_list(registry)
     if args.command == "run":
         return _cmd_run(args, registry)
+    if args.command == "start":
+        return start_run(args, RunStore())
+    if args.command == "status":
+        return status_run(args.run_id, RunStore())
+    if args.command == "cancel":
+        return cancel_run(args.run_id, RunStore())
+    if args.command == "logs":
+        return show_logs(args.run_id, RunStore(), args.follow)
     return EXIT_OK
 
 
