@@ -6,18 +6,16 @@ import argparse
 import asyncio
 import json
 import sys
-from pathlib import Path
 
 from agents.console.envelope import (
     EXIT_AGENT_FAILED, EXIT_OK, EXIT_UNAVAILABLE,
     build_envelope, usage_error,
 )
 from agents.console.lifecycle import cancel_run, show_logs, start_run, status_run
-from agents.console.registry import build_registry, validate_flags
+from agents.console.registry import build_registry
+from agents.console.runner import BackendUnavailable, UsageError, execute_run
 from agents.console.stats import stats_command
 from agents.console.store import RunStore
-from agents.inprocess.ollama import embed_files
-from agents.types import AgentConfig, Capability
 
 
 def _add_run_flags(parser: argparse.ArgumentParser) -> None:
@@ -137,62 +135,19 @@ def _cmd_backends_list(registry: dict) -> int:
     return EXIT_OK
 
 
-async def _run_cli_backend(backend, prompt: str, config: AgentConfig):
-    run = await backend.spawn(prompt, config)
-    return await backend.wait(run)
-
-
 def _cmd_run(args, registry: dict) -> int:
-    backend = registry.get(args.backend)
-    if backend is None:
-        known = ", ".join(sorted(registry))
-        return usage_error(
-            f"unknown backend '{args.backend}'. Known backends: {known}.",
-            f"agents run --backend {sorted(registry)[0]} --task \"...\"",
-        )
-
-    problem = validate_flags(backend, args.workspace, args.file)
-    if problem is not None:
-        return usage_error(*problem)
-
-    if not backend.available():
-        print(
-            f"Error: backend '{args.backend}' is not available on this machine.",
-            file=sys.stderr,
-        )
+    try:
+        result = asyncio.run(execute_run(
+            args.backend, args.task,
+            files=args.file, workspace=args.workspace, model=args.model,
+            timeout=args.timeout, run_id=getattr(args, "run_id", None),
+            registry=registry,
+        ))
+    except UsageError as exc:
+        return usage_error(exc.message, exc.example)
+    except BackendUnavailable as exc:
+        print(f"Error: {exc}", file=sys.stderr)
         return EXIT_UNAVAILABLE
-
-    env = {}
-    if args.model:
-        env["AGY_MODEL" if args.backend == "agy" else "OLLAMA_MODEL"] = args.model
-
-    config = AgentConfig(
-        workspace=Path(args.workspace or "."),
-        timeout_seconds=args.timeout,
-        env=env,
-    )
-
-    prompt = args.task
-    if args.file:
-        context = embed_files([Path(p) for p in args.file])
-        prompt = f"{context}\n\n===== QUESTION =====\n{args.task}"
-
-    if Capability.CONTEXT in backend.capabilities:
-        result = asyncio.run(backend.run(prompt, config))
-    else:
-        result = asyncio.run(_run_cli_backend(backend, prompt, config))
-
-    # When launched by `agents start`, adopt the run_id the parent recorded and
-    # persist the terminal state, otherwise status/logs would never see the run
-    # finish and --follow would hang forever.
-    run_id = getattr(args, "run_id", None)
-    if run_id:
-        result.run.run_id = run_id
-        RunStore().save(result.run)
-
-    # Every finished run lands in the ledger; without it `stats` has nothing
-    # to read and delegation savings stay unmeasurable.
-    RunStore().append_ledger(result.run)
 
     print(json.dumps(build_envelope(result), indent=2))
     return EXIT_OK if result.success else EXIT_AGENT_FAILED
