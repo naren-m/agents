@@ -6,3 +6,6 @@ build/
 .venv/
 .pytest_cache/
 *.db
+
+# serena MCP workspace state
+.serena/
