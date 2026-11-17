@@ -1,0 +1,16 @@
+{
+ "agents/cli/base.py": {
+  "SML002": 2,
+  "SML004": 1
+ },
+ "agents/http.py": {
+  "SML002": 1
+ },
+ "agents/inprocess/ollama.py": {
+  "SML009": 1
+ },
+ "agents/manager.py": {
+  "SML002": 1,
+  "SML004": 1
+ }
+}

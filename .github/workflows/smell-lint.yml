@@ -1,0 +1,10 @@
+# Code-smell gate: fails on any smell not in .smell_baseline.json.
+# Rules and config: https://github.com/naren-m/smell-lint
+name: smell-lint
+on:
+  pull_request:
+  push:
+    branches: [main]
+jobs:
+  smells:
+    uses: naren-m/smell-lint/.github/workflows/smell-lint.yml@v0.1.0
