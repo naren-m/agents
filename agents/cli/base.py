@@ -370,8 +370,13 @@ class BaseCLIAgent:
             reader_task.cancel()
             try:
                 await reader_task
-            except (asyncio.CancelledError, Exception):
-                pass
+            except asyncio.CancelledError:
+                pass  # expected: we just cancelled it
+            except Exception:  # the run already timed out; keep going
+                logger.warning(
+                    "stdout reader errored after timeout for run %s",
+                    run.run_id, exc_info=True,
+                )
             if sink is not None:
                 await sink.close()
             self._processes.pop(run.run_id, None)
@@ -399,8 +404,13 @@ class BaseCLIAgent:
             reader_task.cancel()
             try:
                 await reader_task
-            except (asyncio.CancelledError, Exception):
-                pass
+            except asyncio.CancelledError:
+                pass  # expected: we just cancelled it
+            except Exception:  # drain is best effort; keep the output we have
+                logger.warning(
+                    "stdout reader errored after drain timeout for run %s",
+                    run.run_id, exc_info=True,
+                )
         except Exception:
             logger.exception("stdout pump errored for run %s", run.run_id)
 
