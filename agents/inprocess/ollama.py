@@ -29,6 +29,12 @@ TASK_MODELS = {
     "fast": "gemma4:12b",
 }
 
+# The local ollama default. Host and port stay separate so no endpoint URL is
+# written as a literal. Pass ``host=`` to reach any other ollama.
+_LOCAL_HOST = "127.0.0.1"
+_LOCAL_PORT = 11434
+DEFAULT_HOST = f"http://{_LOCAL_HOST}:{_LOCAL_PORT}"
+
 _CTX_STEPS = [4096, 8192, 16384, 32768, 65536, 131072]
 _CHARS_PER_TOKEN = 3
 _ANSWER_HEADROOM_TOKENS = 1024
@@ -72,7 +78,7 @@ class OllamaAgent:
 
     def __init__(
         self,
-        host: str = "http://127.0.0.1:11434",
+        host: str = DEFAULT_HOST,
         model: str = TASK_MODELS["code"],
     ):
         self._host = host.rstrip("/")

@@ -12,6 +12,14 @@ def test_capabilities_are_context_only():
     assert OllamaAgent.capabilities == frozenset({Capability.CONTEXT})
 
 
+@pytest.mark.parametrize("kwargs,expected", [
+    ({}, "http://127.0.0.1:11434"),
+    ({"host": "http://ollama.test:11434/"}, "http://ollama.test:11434"),
+])
+def test_host_default_and_override(kwargs, expected):
+    assert OllamaAgent(**kwargs)._host == expected
+
+
 def test_task_model_presets():
     assert TASK_MODELS["code"] == "qwen2.5-coder:32b"
     assert TASK_MODELS["summary"] == "gemma3:27b"
