@@ -693,6 +693,22 @@ class TestBusJanitor:
         assert mgr._janitor_task is None
 
     @pytest.mark.asyncio
+    async def test_stop_logs_janitor_error(self, config, caplog):
+        from agents.manager import AgentManager
+
+        async def _boom() -> None:
+            raise RuntimeError("janitor broke")
+
+        mgr = AgentManager(config=config)
+        mgr._janitor_task = asyncio.create_task(_boom())  # intentional private set
+        await asyncio.sleep(0)  # let the task fail before stop cancels it
+        with caplog.at_level("WARNING", logger="agents.manager"):
+            await mgr.stop_bus_janitor()  # must not raise
+
+        assert "bus janitor errored on shutdown" in caplog.text
+        assert mgr._janitor_task is None
+
+    @pytest.mark.asyncio
     async def test_stop_cancels_task(self, config):
         from agents.manager import AgentManager
 

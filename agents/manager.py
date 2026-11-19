@@ -101,9 +101,10 @@ class AgentManager:
         task.cancel()
         try:
             await task
-        except (asyncio.CancelledError, Exception):
-            # We own the task: swallow whatever it raises on shutdown.
-            pass
+        except asyncio.CancelledError:
+            pass  # expected: we just cancelled it
+        except Exception:  # we own the task; shutdown must not raise
+            logger.warning("bus janitor errored on shutdown", exc_info=True)
 
     async def _janitor_loop(self, interval_seconds: float) -> None:
         """Run ``cleanup_expired()`` forever at the configured cadence.

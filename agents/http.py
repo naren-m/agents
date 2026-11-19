@@ -155,8 +155,10 @@ async def _sse_iter(bus: "RunEventBus") -> AsyncIterator[bytes]:
     finally:
         try:
             await sub.aclose()
-        except BaseException:  # pragma: no cover - defensive
-            pass
+        except (asyncio.CancelledError, GeneratorExit):  # pragma: no cover
+            pass  # client went away mid-stream; nothing left to close
+        except Exception:  # pragma: no cover - defensive
+            logger.warning("SSE subscription close failed", exc_info=True)
 
 
 def _format_sse(event: dict[str, Any]) -> bytes:
