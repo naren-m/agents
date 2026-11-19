@@ -1,8 +1,1 @@
-{
- "agents/cli/base.py": {
-  "SML004": 1
- },
- "agents/manager.py": {
-  "SML004": 1
- }
-}
+{}
