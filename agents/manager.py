@@ -263,45 +263,14 @@ class AgentManager:
         start_monotonic = time.monotonic()
 
         if hasattr(agent, "build_command"):
-            run = await agent.spawn(
-                prompt, run_config,
-                run_id_hint=run_id,
-                agent_name=agent_name,
+            run = await self._spawn_cli(
+                agent, prompt, run_config, run_id, agent_name,
+                start_monotonic,
             )
-            tracked = _TrackedRun(
-                run=run,
-                agent=agent,
-                kind="cli",
-                start_monotonic=start_monotonic,
-            )
-            self._active_runs[run.run_id] = tracked
         else:
-            run = AgentRun.create(
-                backend=agent.name, prompt=prompt, run_id=run_id,
-            )
-            run.agent_name = agent_name
-            task = asyncio.create_task(
-                agent.run(prompt, run_config)
-            )
-            tracked = _TrackedRun(
-                run=run,
-                agent=agent,
-                kind="inprocess",
-                task=task,
-                start_monotonic=start_monotonic,
-            )
-            self._active_runs[run.run_id] = tracked
-            # CLI backends publish run.started themselves from spawn();
-            # in-process backends never call into BaseCLIAgent, so we
-            # publish here to keep the event contract consistent.
-            await self._publish_event(
-                run_id,
-                "run.started",
-                {
-                    "backend": agent.name,
-                    "prompt_len": len(prompt),
-                    "transcript_path": None,
-                },
+            run = await self._spawn_inprocess(
+                agent, prompt, run_config, run_id, agent_name,
+                start_monotonic,
             )
 
         logger.info(
@@ -312,6 +281,72 @@ class AgentManager:
 
         asyncio.create_task(self._monitor_run(run.run_id))
 
+        return run
+
+    async def _spawn_cli(
+        self,
+        agent,
+        prompt: str,
+        run_config,
+        run_id: str,
+        agent_name: str | None,
+        start_monotonic: float,
+    ) -> AgentRun:
+        """Launch a CLI backend subprocess and register it as active."""
+        run = await agent.spawn(
+            prompt, run_config,
+            run_id_hint=run_id,
+            agent_name=agent_name,
+        )
+        tracked = _TrackedRun(
+            run=run,
+            agent=agent,
+            kind="cli",
+            start_monotonic=start_monotonic,
+        )
+        self._active_runs[run.run_id] = tracked
+        return run
+
+    async def _spawn_inprocess(
+        self,
+        agent,
+        prompt: str,
+        run_config,
+        run_id: str,
+        agent_name: str | None,
+        start_monotonic: float,
+    ) -> AgentRun:
+        """Wrap an in-process backend's ``run()`` in a task and register it.
+
+        Also publishes ``run.started``, which CLI backends do themselves.
+        """
+        run = AgentRun.create(
+            backend=agent.name, prompt=prompt, run_id=run_id,
+        )
+        run.agent_name = agent_name
+        task = asyncio.create_task(
+            agent.run(prompt, run_config)
+        )
+        tracked = _TrackedRun(
+            run=run,
+            agent=agent,
+            kind="inprocess",
+            task=task,
+            start_monotonic=start_monotonic,
+        )
+        self._active_runs[run.run_id] = tracked
+        # CLI backends publish run.started themselves from spawn();
+        # in-process backends never call into BaseCLIAgent, so we
+        # publish here to keep the event contract consistent.
+        await self._publish_event(
+            run_id,
+            "run.started",
+            {
+                "backend": agent.name,
+                "prompt_len": len(prompt),
+                "transcript_path": None,
+            },
+        )
         return run
 
     async def _monitor_run(self, run_id: str) -> None:

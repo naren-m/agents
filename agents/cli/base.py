@@ -336,27 +336,9 @@ class BaseCLIAgent:
 
         assert process.stdout is not None  # stdout was PIPEd in spawn()
 
-        async def _reader() -> None:
-            while True:
-                chunk = await process.stdout.read(_STDOUT_READ_CHUNK_BYTES)
-                if not chunk:
-                    break
-                accum.extend(chunk)
-                try:
-                    await bus.append_log(chunk)
-                except Exception:
-                    logger.exception(
-                        "append_log failed for run %s", run.run_id,
-                    )
-                if sink is not None:
-                    try:
-                        await sink.write_line(chunk)
-                    except Exception:
-                        logger.exception(
-                            "sink.write_line failed for run %s", run.run_id,
-                        )
-
-        reader_task = asyncio.create_task(_reader())
+        reader_task = asyncio.create_task(
+            self._pump_stdout(run, process, bus, accum, sink)
+        )
 
         try:
             await asyncio.wait_for(
@@ -385,12 +367,71 @@ class BaseCLIAgent:
                 success=False, output=output[-4000:], run=run,
             )
 
-        # Process exited; give the reader a brief drain window for any
-        # remaining buffered lines, then force-cancel it.  Bounding the
-        # drain matters when the child forked a daemon that inherited
-        # stdout (cursor-agent's worker-server is the canonical
-        # example) -- without this, ``read()`` blocks waiting for
-        # an EOF that only arrives when the orphan dies.
+        await self._drain_reader(run, reader_task)
+
+        if sink is not None:
+            await sink.close()
+
+        output = bytes(accum).decode("utf-8", errors="replace")
+        self.parse_output(output, run)
+
+        if not run.is_terminal:
+            if process.returncode == 0:
+                run.mark_completed(exit_code=0)
+            else:
+                run.mark_failed(exit_code=process.returncode or 1)
+
+        self._processes.pop(run.run_id, None)
+        truncated = output[-4000:] if len(output) > 4000 else output
+        return AgentResult(
+            success=run.status == "completed",
+            output=truncated,
+            run=run,
+        )
+
+    async def _pump_stdout(
+        self,
+        run: AgentRun,
+        process: asyncio.subprocess.Process,
+        bus: RunEventBus,
+        accum: bytearray,
+        sink,
+    ) -> None:
+        """Copy stdout chunks into ``accum``, the bus and the sink until EOF.
+
+        Bus and sink write failures are logged and skipped so one bad
+        consumer never stops the pump.
+        """
+        while True:
+            chunk = await process.stdout.read(_STDOUT_READ_CHUNK_BYTES)
+            if not chunk:
+                break
+            accum.extend(chunk)
+            try:
+                await bus.append_log(chunk)
+            except Exception:
+                logger.exception(
+                    "append_log failed for run %s", run.run_id,
+                )
+            if sink is not None:
+                try:
+                    await sink.write_line(chunk)
+                except Exception:
+                    logger.exception(
+                        "sink.write_line failed for run %s", run.run_id,
+                    )
+
+    async def _drain_reader(
+        self, run: AgentRun, reader_task: asyncio.Task,
+    ) -> None:
+        """Give the stdout reader a bounded drain window, then cancel it.
+
+        The process has exited. Bounding the drain matters when the
+        child forked a daemon that inherited stdout (cursor-agent's
+        worker-server is the canonical example) -- without this,
+        ``read()`` blocks waiting for an EOF that only arrives when the
+        orphan dies.
+        """
         try:
             await asyncio.wait_for(
                 reader_task, timeout=_STDOUT_DRAIN_GRACE_SECONDS,
@@ -413,26 +454,6 @@ class BaseCLIAgent:
                 )
         except Exception:
             logger.exception("stdout pump errored for run %s", run.run_id)
-
-        if sink is not None:
-            await sink.close()
-
-        output = bytes(accum).decode("utf-8", errors="replace")
-        self.parse_output(output, run)
-
-        if not run.is_terminal:
-            if process.returncode == 0:
-                run.mark_completed(exit_code=0)
-            else:
-                run.mark_failed(exit_code=process.returncode or 1)
-
-        self._processes.pop(run.run_id, None)
-        truncated = output[-4000:] if len(output) > 4000 else output
-        return AgentResult(
-            success=run.status == "completed",
-            output=truncated,
-            run=run,
-        )
 
     async def cancel(self, run: AgentRun) -> bool:
         """Send SIGTERM to the process. Returns True if signal was sent."""
