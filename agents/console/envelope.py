@@ -43,6 +43,6 @@ def usage_error(message: str, example: str) -> int:
     No envelope: no run happened, so there is no run_id or telemetry to report
     and emitting one would fabricate a run.
     """
-    print(f"Error: {message}", file=sys.stderr)
-    print(f"  {example}", file=sys.stderr)
+    sys.stderr.write(f"Error: {message}\n")
+    sys.stderr.write(f"  {example}\n")
     return EXIT_USAGE

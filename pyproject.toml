@@ -38,8 +38,6 @@ testpaths = ["tests"]
 asyncio_mode = "auto"
 
 # Code-smell gate (naren-m/smell-lint v0.1.0). Baseline: .smell_baseline.json.
-# Scan the library. agents/console is the `agents` CLI, which prints by design,
-# so it is skipped. tests/ is out of scope.
+# Scan the whole repo: the library, the `agents` console CLI, and tests/.
 [tool.smell_lint]
-paths = ["agents"]
-exclude = ["agents/console"]
+paths = ["."]

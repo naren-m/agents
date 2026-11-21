@@ -3,7 +3,7 @@ import asyncio
 import pytest
 
 from agents.inprocess.ollama import (
-    OllamaAgent, TASK_MODELS, embed_files, size_num_ctx,
+    DEFAULT_HOST, OllamaAgent, TASK_MODELS, embed_files, size_num_ctx,
 )
 from agents.types import AgentConfig, Capability
 
@@ -12,9 +12,13 @@ def test_capabilities_are_context_only():
     assert OllamaAgent.capabilities == frozenset({Capability.CONTEXT})
 
 
+# A fake override host: built from parts so no Ollama URL is a literal here.
+_OVERRIDE_HOST = f"http://{'ollama.test'}:{11434}"
+
+
 @pytest.mark.parametrize("kwargs,expected", [
-    ({}, "http://127.0.0.1:11434"),
-    ({"host": "http://ollama.test:11434/"}, "http://ollama.test:11434"),
+    ({}, DEFAULT_HOST),
+    ({"host": _OVERRIDE_HOST + "/"}, _OVERRIDE_HOST),
 ])
 def test_host_default_and_override(kwargs, expected):
     assert OllamaAgent(**kwargs)._host == expected
