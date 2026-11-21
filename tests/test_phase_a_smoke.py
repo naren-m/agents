@@ -71,9 +71,9 @@ class _PrintfCLIAgent:
     def build_command(self, prompt, config):
         return self._inner.build_command(prompt, config)
 
-    async def spawn(self, prompt, config, run_id_hint=None):
+    async def spawn(self, prompt, config, run_id_hint=None, agent_name=None):
         return await self._inner.spawn(
-            prompt, config, run_id_hint=run_id_hint,
+            prompt, config, run_id_hint=run_id_hint, agent_name=agent_name,
         )
 
     async def wait(self, run):
