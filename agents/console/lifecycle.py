@@ -64,7 +64,7 @@ def start_run(args, store: RunStore) -> int:
     if key:
         existing = store.find_by_key(key)
         if existing:
-            print(json.dumps({"run_id": existing, "reused": True}, indent=2))
+            sys.stdout.write(json.dumps({"run_id": existing, "reused": True}, indent=2) + "\n")
             return EXIT_OK
 
     run = AgentRun.create(backend=args.backend, prompt=args.task)
@@ -76,7 +76,7 @@ def start_run(args, store: RunStore) -> int:
     if key:
         store.save_key(key, run.run_id)
 
-    print(json.dumps({"run_id": run.run_id, "reused": False}, indent=2))
+    sys.stdout.write(json.dumps({"run_id": run.run_id, "reused": False}, indent=2) + "\n")
     return EXIT_OK
 
 
@@ -87,7 +87,7 @@ def status_run(run_id: str, store: RunStore) -> int:
             f"no run with id '{run_id}'.",
             "agents start --backend ollama --task \"...\"   # returns a run_id",
         )
-    print(json.dumps(data, indent=2))
+    sys.stdout.write(json.dumps(data, indent=2) + "\n")
     return EXIT_OK
 
 
@@ -102,8 +102,8 @@ def cancel_run(run_id: str, store: RunStore) -> int:
     # Cancelling a finished run is a no-op that reports the terminal status,
     # because orchestrators retry and a hard error there is noise.
     if data.get("status") in _TERMINAL:
-        print(json.dumps({"run_id": run_id, "status": data["status"],
-                          "cancelled": False}, indent=2))
+        sys.stdout.write(json.dumps({"run_id": run_id, "status": data["status"],
+                                     "cancelled": False}, indent=2) + "\n")
         return EXIT_OK
 
     pid = data.get("pid")
@@ -119,8 +119,8 @@ def cancel_run(run_id: str, store: RunStore) -> int:
     (store.runs_dir / f"{run_id}.json").write_text(
         json.dumps(data, indent=2), encoding="utf-8"
     )
-    print(json.dumps({"run_id": run_id, "status": "cancelled",
-                      "cancelled": cancelled}, indent=2))
+    sys.stdout.write(json.dumps({"run_id": run_id, "status": "cancelled",
+                                 "cancelled": cancelled}, indent=2) + "\n")
     return EXIT_OK
 
 
@@ -134,11 +134,11 @@ def show_logs(run_id: str, store: RunStore, follow: bool) -> int:
 
     log_path = store.root / "logs" / f"{run_id}.log"
     if not log_path.exists():
-        print("")
+        sys.stdout.write("\n")
         return EXIT_OK
 
     if not follow:
-        print(log_path.read_text(encoding="utf-8"), end="")
+        sys.stdout.write(log_path.read_text(encoding="utf-8"))
         return EXIT_OK
 
     # agy streams step_update events, so following shows progress live.
@@ -147,16 +147,16 @@ def show_logs(run_id: str, store: RunStore, follow: bool) -> int:
         while True:
             line = fh.readline()
             if line:
-                print(line, end="")
+                sys.stdout.write(line)
                 continue
             current = store.load(run_id) or {}
             if current.get("status") in _TERMINAL:
-                print(fh.read(), end="")
+                sys.stdout.write(fh.read())
                 return EXIT_OK
             # A killed child can never mark itself terminal, so liveness is
             # the backstop that keeps this from hanging on a stale record.
             pid = current.get("pid")
             if pid and not _pid_alive(pid):
-                print(fh.read(), end="")
+                sys.stdout.write(fh.read())
                 return EXIT_OK
             time.sleep(0.2)

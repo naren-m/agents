@@ -131,7 +131,7 @@ def _cmd_backends_list(registry: dict) -> int:
     for name, backend in sorted(registry.items()):
         caps = ", ".join(sorted(c.value for c in backend.capabilities))
         state = "available" if backend.available() else "unavailable"
-        print(f"{name:<8} {state:<12} {caps}")
+        sys.stdout.write(f"{name:<8} {state:<12} {caps}\n")
     return EXIT_OK
 
 
@@ -146,10 +146,10 @@ def _cmd_run(args, registry: dict) -> int:
     except UsageError as exc:
         return usage_error(exc.message, exc.example)
     except BackendUnavailable as exc:
-        print(f"Error: {exc}", file=sys.stderr)
+        sys.stderr.write(f"Error: {exc}\n")
         return EXIT_UNAVAILABLE
 
-    print(json.dumps(build_envelope(result), indent=2))
+    sys.stdout.write(json.dumps(build_envelope(result), indent=2) + "\n")
     return EXIT_OK if result.success else EXIT_AGENT_FAILED
 
 

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import sys
 from datetime import datetime, timedelta, timezone
 from statistics import median
 
@@ -74,12 +75,12 @@ def stats_command(store: RunStore, since, backend, fmt: str) -> int:
     summary = summarise(entries)
 
     if fmt == "table":
-        print(f"{'backend':<10}{'runs':>6}{'in':>12}{'out':>10}"
-              f"{'cost_usd':>12}{'median_ms':>12}{'success':>10}")
+        sys.stdout.write(f"{'backend':<10}{'runs':>6}{'in':>12}{'out':>10}"
+                         f"{'cost_usd':>12}{'median_ms':>12}{'success':>10}\n")
         for name, row in sorted(summary.items()):
-            print(f"{name:<10}{row['runs']:>6}{row['input_tokens']:>12}"
-                  f"{row['output_tokens']:>10}{row['cost_usd']:>12.4f}"
-                  f"{row['median_duration_ms']:>12}{row['success_rate']:>10.2f}")
+            sys.stdout.write(f"{name:<10}{row['runs']:>6}{row['input_tokens']:>12}"
+                             f"{row['output_tokens']:>10}{row['cost_usd']:>12.4f}"
+                             f"{row['median_duration_ms']:>12}{row['success_rate']:>10.2f}\n")
     else:
-        print(json.dumps(summary, indent=2))
+        sys.stdout.write(json.dumps(summary, indent=2) + "\n")
     return EXIT_OK
